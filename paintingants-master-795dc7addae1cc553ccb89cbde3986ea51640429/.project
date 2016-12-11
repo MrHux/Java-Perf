@@ -20,4 +20,11 @@
 		<nature>org.eclipse.jdt.core.javanature</nature>
 		<nature>org.eclipse.m2e.core.maven2Nature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>src/main/java/org/projectsforge/performance/tp/fourmispeintre/Thread_ForFourmis.java</name>
+			<type>1</type>
+			<location>/home/hux/eclipse_workspace/paintingants-master-795dc7addae1cc553ccb89cbde3986ea51640429/src/main/java/org/projectsforge/performance/tp/fourmispeintre/Thread_ForFourmis.java</location>
+		</link>
+	</linkedResources>
 </projectDescription>

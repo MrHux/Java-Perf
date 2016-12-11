@@ -8,457 +8,492 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.StringTokenizer;
 import java.util.Vector;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 
 public class PaintingAnts extends java.applet.Applet implements Runnable {
-  private static final long serialVersionUID = 1L;
-  // parametres
-  private int mLargeur;
-  private int mHauteur;
+	private static final long serialVersionUID = 1L;
 
-  // l'objet graphique lui meme
-  private CPainting mPainting;
+	/**
+	 *
+	 * @param pool
+	 */
+	public static void shutdownAndAwaitTermination(ExecutorService pool) {
+		pool.shutdown(); // Disable new tasks from being submitted
+		try {
+			// Wait a while for existing tasks to terminate
+			if (!pool.awaitTermination(10, TimeUnit.SECONDS)) {
+				pool.shutdownNow(); // Cancel currently executing tasks
+				// Wait a while for tasks to respond to being cancelled
+				if (!pool.awaitTermination(10, TimeUnit.SECONDS)) {
+					System.err.println("Pool did not terminate");
+				}
+			}
+		} catch (InterruptedException ie) {
+			// (Re-)Cancel if current thread also interrupted
+			pool.shutdownNow();
+			// Preserve interrupt status
+			Thread.currentThread().interrupt();
+		}
+	}
 
-  // les fourmis
-  private Vector<CFourmi> mColonie = new Vector<>();
-  private CColonie mColony;
+	/**
+	 * Code ajouter
+	 */
+	ExecutorService executor;
 
-  private Thread mApplis, mThreadColony;
+	// parametres
+	private int mLargeur;
 
-  private Dimension mDimension;
-  private boolean mPause = false;
+	private int mHauteur;
+	// l'objet graphique lui meme
+	private CPainting mPainting;
 
-  public BufferedImage mBaseImage;
+	// les fourmis
+	private Vector<CFourmi> mColonie = new Vector<>();
 
-  private StatisticsHandler statisticsHandler;
+	private CColonie mColony;
+	private Thread mApplis;
 
-  /****************************************************************************/
-  /**
-   * Détruire l'applet
-   *
-   */
-  @Override
-  public void destroy() {
-    // System.out.println(this.getName()+ ":destroy()");
+	private Dimension mDimension;
 
-    if (mApplis != null) {
-      mApplis = null;
-    }
-  }
+	private boolean mPause = false;
 
-  /****************************************************************************/
-  /**
-   * Obtenir l'information Applet
-   *
-   */
-  @Override
-  public String getAppletInfo() {
-    return "Painting Ants";
-  }
+	public BufferedImage mBaseImage;
 
-  /****************************************************************************/
-  /**
-   * Obtenir l'information Applet
-   *
-   */
+	private StatisticsHandler statisticsHandler;
 
-  @Override
-  public String[][] getParameterInfo() {
-    String[][] lInfo = { { "SeuilLuminance", "string", "Seuil de luminance" }, { "Img", "string", "Image" },
-        { "NbFourmis", "string", "Nombre de fourmis" }, { "Fourmis", "string",
-            "Paramètres des fourmis (RGB_déposée)(RGB_suivie)(x,y,direction,taille)(TypeDeplacement,ProbaG,ProbaTD,ProbaD,ProbaSuivre);...;" } };
-    return lInfo;
-  }
+	/****************************************************************************/
+	/**
+	 * Détruire l'applet
+	 *
+	 */
+	@Override
+	public void destroy() {
+		// System.out.println(this.getName()+ ":destroy()");
 
-  /****************************************************************************/
-  /**
-   * Obtenir l'état de pause
-   *
-   */
-  public boolean getPause() {
-    return mPause;
-  }
+		if (mApplis != null) {
+			mApplis = null;
+		}
+	}
 
-  public synchronized void IncrementFpsCounter() {
-    statisticsHandler.incrementFpsCounter();
-  }
+	/****************************************************************************/
+	/**
+	 * Obtenir l'information Applet
+	 *
+	 */
+	@Override
+	public String getAppletInfo() {
+		return "Painting Ants";
+	}
 
-  /****************************************************************************/
-  /**
-   * Initialisation de l'applet
-   *
-   */
-  @Override
-  public void init() {
-    URL lFileName;
-    URLClassLoader urlLoader = (URLClassLoader) this.getClass().getClassLoader();
+	/****************************************************************************/
+	/**
+	 * Obtenir l'information Applet
+	 *
+	 */
 
-    // lecture des parametres de l'applet
+	@Override
+	public String[][] getParameterInfo() {
+		String[][] lInfo = { { "SeuilLuminance", "string", "Seuil de luminance" }, { "Img", "string", "Image" },
+				{ "NbFourmis", "string", "Nombre de fourmis" }, { "Fourmis", "string",
+						"Paramètres des fourmis (RGB_déposée)(RGB_suivie)(x,y,direction,taille)(TypeDeplacement,ProbaG,ProbaTD,ProbaD,ProbaSuivre);...;" } };
+		return lInfo;
+	}
 
-    mDimension = getSize();
-    mLargeur = mDimension.width;
-    mHauteur = mDimension.height;
+	/****************************************************************************/
+	/**
+	 * Obtenir l'état de pause
+	 *
+	 */
+	public boolean getPause() {
+		return mPause;
+	}
 
-    mPainting = new CPainting(mDimension, this);
-    add(mPainting);
+	public void IncrementFpsCounter() {
+		statisticsHandler.incrementFpsCounter();
+	}
 
-    // lecture de l'image
-    lFileName = urlLoader.findResource("images/" + getParameter("Img"));
-    try {
-      if (lFileName != null) {
-        mBaseImage = javax.imageio.ImageIO.read(lFileName);
-      }
-    } catch (java.io.IOException ex) {
-    }
+	/****************************************************************************/
+	/**
+	 * Initialisation de l'applet
+	 *
+	 */
+	@Override
+	public void init() {
+		URL lFileName;
+		URLClassLoader urlLoader = (URLClassLoader) this.getClass().getClassLoader();
 
-    if (mBaseImage != null) {
-      mLargeur = mBaseImage.getWidth();
-      mHauteur = mBaseImage.getHeight();
-      mDimension.setSize(mLargeur, mHauteur);
-      resize(mDimension);
-    }
+		// lecture des parametres de l'applet
 
-    readParameterFourmis();
+		mDimension = getSize();
+		mLargeur = mDimension.width;
+		mHauteur = mDimension.height;
 
-    setLayout(null);
+		mPainting = new CPainting(mDimension, this);
+		add(mPainting);
 
-    statisticsHandler = new StatisticsHandler();
-  }
+		// lecture de l'image
+		lFileName = urlLoader.findResource("images/" + getParameter("Img"));
+		try {
+			if (lFileName != null) {
+				mBaseImage = javax.imageio.ImageIO.read(lFileName);
+			}
+		} catch (java.io.IOException ex) {
+		}
 
-  /****************************************************************************/
-  /**
-   * Paint the image and all active highlights.
-   */
-  @Override
-  public void paint(Graphics g) {
+		if (mBaseImage != null) {
+			mLargeur = mBaseImage.getWidth();
+			mHauteur = mBaseImage.getHeight();
+			mDimension.setSize(mLargeur, mHauteur);
+			resize(mDimension);
+		}
 
-    if (mBaseImage == null) {
-      return;
-    }
-    g.drawImage(mBaseImage, 0, 0, this);
-  }
+		readParameterFourmis();
 
-  /****************************************************************************/
-  /**
-   * Mettre en pause
-   *
-   */
-  public void pause() {
-    mPause = !mPause;
-    // if (!mPause)
-    // {
-    // notify();
-    // }
-  }
+		setLayout(null);
 
-  // =========================================================================
-  // cette fonction analyse une chaine :
-  // si pStr est un nombre : sa valeur est retournée
-  // si pStr est un interval x..y : une valeur au hasard dans [x,y] est
-  // retournée
-  private float readFloatParameter(String pStr) {
-    float lMin, lMax, lResult;
-    // System.out.println(" chaine pStr: "+pStr);
-    StringTokenizer lStrTok = new StringTokenizer(pStr, ":");
-    // on lit une premiere valeur
-    lMin = Float.valueOf(lStrTok.nextToken()).floatValue();
-    // System.out.println(" lMin: "+lMin);
-    lResult = lMin;
-    // on essaye d'en lire une deuxieme
-    try {
-      lMax = Float.valueOf(lStrTok.nextToken()).floatValue();
-      // System.out.println(" lMax: "+lMax);
-      if (lMax > lMin) {
-        // on choisit un nombre entre lMin et lMax
-        lResult = (float) (Math.random() * (lMax - lMin)) + lMin;
-      }
-    } catch (java.util.NoSuchElementException e) {
-      // il n'y pas de deuxieme nombre et donc le nombre retourné correspond au
-      // premier nombre
-    }
-    return lResult;
-  }
+		statisticsHandler = new StatisticsHandler();
+	}
 
-  // =========================================================================
-  // cette fonction analyse une chaine :
-  // si pStr est un nombre : sa valeur est retournée
-  // si pStr est un interval x..y : une valeur au hasard dans [x,y] est
-  // retournée
-  private int readIntParameter(String pStr) {
-    int lMin, lMax, lResult;
-    StringTokenizer lStrTok = new StringTokenizer(pStr, ":");
-    // on lit une premiere valeur
-    lMin = Integer.valueOf(lStrTok.nextToken()).intValue();
-    lResult = lMin;
-    // on essaye d'en lire une deuxieme
-    try {
-      lMax = Integer.valueOf(lStrTok.nextToken()).intValue();
-      if (lMax > lMin) {
-        // on choisit un nombre entre lMin et lMax
-        lResult = (int) (Math.random() * (lMax - lMin + 1)) + lMin;
-      }
-    } catch (java.util.NoSuchElementException e) {
-      // il n'y pas de deuxieme nombre et donc le nombre retourné correspond au
-      // premier nombre
-    }
-    return lResult;
-  }
+	/****************************************************************************/
+	/**
+	 * Paint the image and all active highlights.
+	 */
+	@Override
+	public void paint(Graphics g) {
 
-  // =========================================================================
-  // lecture des paramètres de l'applet
-  private void readParameterFourmis() {
-    String lChaine;
-    int R, G, B;
-    Color lCouleurDeposee, lCouleurSuivie;
-    CFourmi lFourmi;
-    float lProbaTD, lProbaG, lProbaD, lProbaSuivre, lSeuilLuminance;
-    char lTypeDeplacement = ' ';
-    int lInitDirection, lTaille;
-    float lInit_x, lInit_y;
-    int lNbFourmis;
-    
-    lChaine = getParameter("SeuilLuminance");
-    if(lChaine != null){
-    	//récupération du seuil de luminance
-    	lSeuilLuminance = readFloatParameter(lChaine);
-    } else {
-    	lSeuilLuminance = 40f;
-    }
-    
-    // Lecture des paramètres des fourmis
-    lChaine = getParameter("Fourmis");
-    if (lChaine != null) {
-    	
-      
-      
-      // on affiche la chaine de parametres
-      System.out.println("Paramètres:" + lChaine);
+		if (mBaseImage == null) {
+			return;
+		}
+		g.drawImage(mBaseImage, 0, 0, this);
+	}
 
-      // on va compter le nombre de fourmis dans la chaine de parametres :
-      lNbFourmis = 0;
-      // chaine de paramètres pour une fourmi
-      StringTokenizer lSTFourmi = new StringTokenizer(lChaine, ";");
-      while (lSTFourmi.hasMoreTokens()) {
-        // chaine de parametres de couleur et proba
-        StringTokenizer lSTParam = new StringTokenizer(lSTFourmi.nextToken(), "()");
-        // lecture de la couleur déposée
-        StringTokenizer lSTCouleurDéposée = new StringTokenizer(lSTParam.nextToken(), ",");
-        R = readIntParameter(lSTCouleurDéposée.nextToken());
-        if (R == -1) {
-          R = (int) (Math.random() * 256);
-        }
+	/****************************************************************************/
+	/**
+	 * Mettre en pause
+	 *
+	 */
+	public void pause() {
+		mPause = !mPause;
+	}
 
-        G = readIntParameter(lSTCouleurDéposée.nextToken());
-        if (G == -1) {
-          G = (int) (Math.random() * 256);
-        }
-        B = readIntParameter(lSTCouleurDéposée.nextToken());
-        if (B == -1) {
-          B = (int) (Math.random() * 256);
-        }
-        lCouleurDeposee = new Color(R, G, B);
-        System.out.print("Parametres de la fourmi " + lNbFourmis + ":(" + R + "," + G + "," + B + ")");
+	// =========================================================================
+	// cette fonction analyse une chaine :
+	// si pStr est un nombre : sa valeur est retournée
+	// si pStr est un interval x..y : une valeur au hasard dans [x,y] est
+	// retournée
+	private float readFloatParameter(String pStr) {
+		float lMin, lMax, lResult;
+		// System.out.println(" chaine pStr: "+pStr);
+		StringTokenizer lStrTok = new StringTokenizer(pStr, ":");
+		// on lit une premiere valeur
+		lMin = Float.valueOf(lStrTok.nextToken()).floatValue();
+		// System.out.println(" lMin: "+lMin);
+		lResult = lMin;
+		// on essaye d'en lire une deuxieme
+		try {
+			lMax = Float.valueOf(lStrTok.nextToken()).floatValue();
+			// System.out.println(" lMax: "+lMax);
+			if (lMax > lMin) {
+				// on choisit un nombre entre lMin et lMax
+				lResult = (float) (Math.random() * (lMax - lMin)) + lMin;
+			}
+		} catch (java.util.NoSuchElementException e) {
+			// il n'y pas de deuxieme nombre et donc le nombre retourné
+			// correspond au
+			// premier nombre
+		}
+		return lResult;
+	}
 
-        // lecture de la couleur suivie
-        StringTokenizer lSTCouleurSuivi = new StringTokenizer(lSTParam.nextToken(), ",");
-        R = readIntParameter(lSTCouleurSuivi.nextToken());
-        G = readIntParameter(lSTCouleurSuivi.nextToken());
-        B = readIntParameter(lSTCouleurSuivi.nextToken());
-        lCouleurSuivie = new Color(R, G, B);
-        System.out.print("(" + R + "," + G + "," + B + ")");
+	// =========================================================================
+	// cette fonction analyse une chaine :
+	// si pStr est un nombre : sa valeur est retournée
+	// si pStr est un interval x..y : une valeur au hasard dans [x,y] est
+	// retournée
+	private int readIntParameter(String pStr) {
+		int lMin, lMax, lResult;
+		StringTokenizer lStrTok = new StringTokenizer(pStr, ":");
+		// on lit une premiere valeur
+		lMin = Integer.valueOf(lStrTok.nextToken()).intValue();
+		lResult = lMin;
+		// on essaye d'en lire une deuxieme
+		try {
+			lMax = Integer.valueOf(lStrTok.nextToken()).intValue();
+			if (lMax > lMin) {
+				// on choisit un nombre entre lMin et lMax
+				lResult = (int) (Math.random() * (lMax - lMin + 1)) + lMin;
+			}
+		} catch (java.util.NoSuchElementException e) {
+			// il n'y pas de deuxieme nombre et donc le nombre retourné
+			// correspond au
+			// premier nombre
+		}
+		return lResult;
+	}
 
-        // lecture de la position de la direction de départ et de la taille de
-        // la trace
-        StringTokenizer lSTDéplacement = new StringTokenizer(lSTParam.nextToken(), ",");
-        lInit_x = readFloatParameter(lSTDéplacement.nextToken());
-        if (lInit_x < 0.0 || lInit_x > 1.0) {
-          lInit_x = (float) Math.random();
-        }
-        lInit_y = readFloatParameter(lSTDéplacement.nextToken());
-        if (lInit_y < 0.0 || lInit_y > 1.0) {
-          lInit_y = (float) Math.random();
-        }
-        lInitDirection = readIntParameter(lSTDéplacement.nextToken());
-        if (lInitDirection < 0 || lInitDirection > 7) {
-          lInitDirection = (int) (Math.random() * 8);
-        }
-        lTaille = readIntParameter(lSTDéplacement.nextToken());
-        if (lTaille < 0 || lTaille > 3) {
-          lTaille = (int) (Math.random() * 4);
-        }
-        System.out.print("(" + lInit_x + "," + lInit_y + "," + lInitDirection + "," + lTaille + ")");
+	// =========================================================================
+	// lecture des paramètres de l'applet
+	private void readParameterFourmis() {
+		String lChaine;
+		int R, G, B;
+		Color lCouleurDeposee, lCouleurSuivie;
+		CFourmi lFourmi;
+		float lProbaTD, lProbaG, lProbaD, lProbaSuivre, lSeuilLuminance;
+		char lTypeDeplacement = ' ';
+		int lInitDirection, lTaille;
+		float lInit_x, lInit_y;
+		int lNbFourmis;
 
-        // lecture des probas
-        StringTokenizer lSTProbas = new StringTokenizer(lSTParam.nextToken(), ",");
-        lTypeDeplacement = lSTProbas.nextToken().charAt(0);
-        // System.out.println(" lTypeDeplacement:"+lTypeDeplacement);
+		lChaine = getParameter("SeuilLuminance");
+		if (lChaine != null) {
+			// récupération du seuil de luminance
+			lSeuilLuminance = readFloatParameter(lChaine);
+		} else {
+			lSeuilLuminance = 40f;
+		}
 
-        if (lTypeDeplacement != 'o' && lTypeDeplacement != 'd') {
-          if (Math.random() < 0.5) {
-            lTypeDeplacement = 'o';
-          } else {
-            lTypeDeplacement = 'd';
-          }
-        }
+		// Lecture des paramètres des fourmis
+		lChaine = getParameter("Fourmis");
+		if (lChaine != null) {
 
-        lProbaG = readFloatParameter(lSTProbas.nextToken());
-        lProbaTD = readFloatParameter(lSTProbas.nextToken());
-        lProbaD = readFloatParameter(lSTProbas.nextToken());
-        lProbaSuivre = readFloatParameter(lSTProbas.nextToken());
-        // on normalise au cas ou
-        float lSomme = lProbaG + lProbaTD + lProbaD;
-        lProbaG /= lSomme;
-        lProbaTD /= lSomme;
-        lProbaD /= lSomme;
+			// on affiche la chaine de parametres
+			System.out.println("Paramètres:" + lChaine);
 
-        System.out.println(
-            "(" + lTypeDeplacement + "," + lProbaG + "," + lProbaTD + "," + lProbaD + "," + lProbaSuivre + ");");
+			// on va compter le nombre de fourmis dans la chaine de parametres :
+			lNbFourmis = 0;
+			// chaine de paramètres pour une fourmi
+			StringTokenizer lSTFourmi = new StringTokenizer(lChaine, ";");
+			while (lSTFourmi.hasMoreTokens()) {
+				// chaine de parametres de couleur et proba
+				StringTokenizer lSTParam = new StringTokenizer(lSTFourmi.nextToken(), "()");
+				// lecture de la couleur déposée
+				StringTokenizer lSTCouleurDéposée = new StringTokenizer(lSTParam.nextToken(), ",");
+				R = readIntParameter(lSTCouleurDéposée.nextToken());
+				if (R == -1) {
+					R = (int) (Math.random() * 256);
+				}
 
-        // création de la fourmi
-        lFourmi = new CFourmi(lCouleurDeposee, lCouleurSuivie, lProbaTD, lProbaG, lProbaD, lProbaSuivre, mPainting,
-            lTypeDeplacement, lInit_x, lInit_y, lInitDirection, lTaille, lSeuilLuminance, this);
-        mColonie.addElement(lFourmi);
-        lNbFourmis++;
-      }
-    } else // initialisation aléatoire des fourmis
-    {
+				G = readIntParameter(lSTCouleurDéposée.nextToken());
+				if (G == -1) {
+					G = (int) (Math.random() * 256);
+				}
+				B = readIntParameter(lSTCouleurDéposée.nextToken());
+				if (B == -1) {
+					B = (int) (Math.random() * 256);
+				}
+				lCouleurDeposee = new Color(R, G, B);
+				System.out.print("Parametres de la fourmi " + lNbFourmis + ":(" + R + "," + G + "," + B + ")");
 
-      int i;
-      lNbFourmis = (int) (Math.random() * 5) + 2;
-      System.out.print("Nombre de fourmis aléa:"+lNbFourmis+"\n");
-      Color lTabColor[] = new Color[lNbFourmis];
-      int lColor;
-      lSeuilLuminance = 40f;
-      System.out.println("Seuil de luminance:" + lSeuilLuminance);
+				// lecture de la couleur suivie
+				StringTokenizer lSTCouleurSuivi = new StringTokenizer(lSTParam.nextToken(), ",");
+				R = readIntParameter(lSTCouleurSuivi.nextToken());
+				G = readIntParameter(lSTCouleurSuivi.nextToken());
+				B = readIntParameter(lSTCouleurSuivi.nextToken());
+				lCouleurSuivie = new Color(R, G, B);
+				System.out.print("(" + R + "," + G + "," + B + ")");
 
-      
-      // initialisation aléatoire de la couleur de chaque fourmi
-      for (i = 0; i < lNbFourmis; i++) {
-        R = (int) (Math.random() * 256);
-        G = (int) (Math.random() * 256);
-        B = (int) (Math.random() * 256);
-        lTabColor[i] = new Color(R, G, B);
-      }
+				// lecture de la position de la direction de départ et de la
+				// taille de
+				// la trace
+				StringTokenizer lSTDéplacement = new StringTokenizer(lSTParam.nextToken(), ",");
+				lInit_x = readFloatParameter(lSTDéplacement.nextToken());
+				if (lInit_x < 0.0 || lInit_x > 1.0) {
+					lInit_x = (float) Math.random();
+				}
+				lInit_y = readFloatParameter(lSTDéplacement.nextToken());
+				if (lInit_y < 0.0 || lInit_y > 1.0) {
+					lInit_y = (float) Math.random();
+				}
+				lInitDirection = readIntParameter(lSTDéplacement.nextToken());
+				if (lInitDirection < 0 || lInitDirection > 7) {
+					lInitDirection = (int) (Math.random() * 8);
+				}
+				lTaille = readIntParameter(lSTDéplacement.nextToken());
+				if (lTaille < 0 || lTaille > 3) {
+					lTaille = (int) (Math.random() * 4);
+				}
+				System.out.print("(" + lInit_x + "," + lInit_y + "," + lInitDirection + "," + lTaille + ")");
 
-      // construction des fourmis
-      for (i = 0; i < lNbFourmis; i++) {
-        // la couleur suivie est la couleur d'une autre fourmi
-        lColor = (int) (Math.random() * lNbFourmis);
-        if (i == lColor) {
-          lColor = (lColor + 1) % lNbFourmis;
-        }
+				// lecture des probas
+				StringTokenizer lSTProbas = new StringTokenizer(lSTParam.nextToken(), ",");
+				lTypeDeplacement = lSTProbas.nextToken().charAt(0);
+				// System.out.println(" lTypeDeplacement:"+lTypeDeplacement);
 
-        // une chance sur deux d'avoir un déplacement perpendiculaire
-        if ((float) Math.random() < 0.5f) {
-          lTypeDeplacement = 'd';
-        } else {
-          lTypeDeplacement = 'o';
-        }
+				if (lTypeDeplacement != 'o' && lTypeDeplacement != 'd') {
+					if (Math.random() < 0.5) {
+						lTypeDeplacement = 'o';
+					} else {
+						lTypeDeplacement = 'd';
+					}
+				}
 
-        // position initiale
-        lInit_x = (float) (Math.random()); // *mPainting.getLargeur()
-        lInit_y = (float) (Math.random()); // *mPainting.getHauteur()
+				lProbaG = readFloatParameter(lSTProbas.nextToken());
+				lProbaTD = readFloatParameter(lSTProbas.nextToken());
+				lProbaD = readFloatParameter(lSTProbas.nextToken());
+				lProbaSuivre = readFloatParameter(lSTProbas.nextToken());
+				// on normalise au cas ou
+				float lSomme = lProbaG + lProbaTD + lProbaD;
+				lProbaG /= lSomme;
+				lProbaTD /= lSomme;
+				lProbaD /= lSomme;
 
-        // direction initiale
-        lInitDirection = (int) (Math.random() * 8);
+				System.out.println("(" + lTypeDeplacement + "," + lProbaG + "," + lProbaTD + "," + lProbaD + ","
+						+ lProbaSuivre + ");");
 
-        // taille du trait
-        lTaille = (int) (Math.random() * 4);
+				// création de la fourmi
+				lFourmi = new CFourmi(lCouleurDeposee, lCouleurSuivie, lProbaTD, lProbaG, lProbaD, lProbaSuivre,
+						mPainting, lTypeDeplacement, lInit_x, lInit_y, lInitDirection, lTaille, lSeuilLuminance, this);
+				mColonie.addElement(lFourmi);
+				lNbFourmis++;
+			}
+		} else // initialisation aléatoire des fourmis
+		{
 
-        // proba de déplacement :
-        lProbaTD = (float) (Math.random());
-        lProbaG = (float) (Math.random() * (1.0 - lProbaTD));
-        lProbaD = (float) (1.0 - (lProbaTD + lProbaG));
-        lProbaSuivre = (float) (0.5 + 0.5 * Math.random());
+			int i;
+			lNbFourmis = (int) (Math.random() * 5) + 2;
+			System.out.print("Nombre de fourmis aléa:" + lNbFourmis + "\n");
+			Color lTabColor[] = new Color[lNbFourmis];
+			int lColor;
+			lSeuilLuminance = 40f;
+			System.out.println("Seuil de luminance:" + lSeuilLuminance);
 
-        System.out.print(
-            "Random:(" + lTabColor[i].getRed() + "," + lTabColor[i].getGreen() + "," + lTabColor[i].getBlue() + ")");
-        System.out.print("(" + lTabColor[lColor].getRed() + "," + lTabColor[lColor].getGreen() + ","
-            + lTabColor[lColor].getBlue() + ")");
-        System.out.print("(" + lInit_x + "," + lInit_y + "," + lInitDirection + "," + lTaille + ")");
-        System.out.println(
-            "(" + lTypeDeplacement + "," + lProbaG + "," + lProbaTD + "," + lProbaD + "," + lProbaSuivre + ");");
+			// initialisation aléatoire de la couleur de chaque fourmi
+			for (i = 0; i < lNbFourmis; i++) {
+				R = (int) (Math.random() * 256);
+				G = (int) (Math.random() * 256);
+				B = (int) (Math.random() * 256);
+				lTabColor[i] = new Color(R, G, B);
+			}
 
-        // création et ajout de la fourmi dans la colonie
-        lFourmi = new CFourmi(lTabColor[i], lTabColor[lColor], lProbaTD, lProbaG, lProbaD, lProbaSuivre, mPainting,
-            lTypeDeplacement, lInit_x, lInit_y, lInitDirection, lTaille, lSeuilLuminance, this);
-        mColonie.addElement(lFourmi);
-      }
-    }
-    // on affiche le nombre de fourmis
-    // System.out.println("Nombre de Fourmis:"+lNbFourmis);
-  }
+			// construction des fourmis
+			for (i = 0; i < lNbFourmis; i++) {
+				// la couleur suivie est la couleur d'une autre fourmi
+				lColor = (int) (Math.random() * lNbFourmis);
+				if (i == lColor) {
+					lColor = (lColor + 1) % lNbFourmis;
+				}
 
-  @Override
-  public void run() {
-    String lMessage;
+				// une chance sur deux d'avoir un déplacement perpendiculaire
+				if ((float) Math.random() < 0.5f) {
+					lTypeDeplacement = 'd';
+				} else {
+					lTypeDeplacement = 'o';
+				}
 
-    mPainting.init();
+				// position initiale
+				lInit_x = (float) (Math.random()); // *mPainting.getLargeur()
+				lInit_y = (float) (Math.random()); // *mPainting.getHauteur()
 
-    Thread currentThread = Thread.currentThread();
+				// direction initiale
+				lInitDirection = (int) (Math.random() * 8);
 
-    /*
-     * for ( i=0 ; i<mColonie.size() ; i++ ) {
-     * ((CFourmi)mColonie.elementAt(i)).start(); }
-     */
+				// taille du trait
+				lTaille = (int) (Math.random() * 4);
 
-    mThreadColony.start();
+				// proba de déplacement :
+				lProbaTD = (float) (Math.random());
+				lProbaG = (float) (Math.random() * (1.0 - lProbaTD));
+				lProbaD = (float) (1.0 - (lProbaTD + lProbaG));
+				lProbaSuivre = (float) (0.5 + 0.5 * Math.random());
 
-    while (mApplis == currentThread) {
-      if (mPause) {
-        lMessage = "pause";
-      } else {
-        lMessage = "running (" + statisticsHandler.getLastFPS() + ") ";
-      }
-      showStatus(lMessage);
+				System.out.print("Random:(" + lTabColor[i].getRed() + "," + lTabColor[i].getGreen() + ","
+						+ lTabColor[i].getBlue() + ")");
+				System.out.print("(" + lTabColor[lColor].getRed() + "," + lTabColor[lColor].getGreen() + ","
+						+ lTabColor[lColor].getBlue() + ")");
+				System.out.print("(" + lInit_x + "," + lInit_y + "," + lInitDirection + "," + lTaille + ")");
+				System.out.println("(" + lTypeDeplacement + "," + lProbaG + "," + lProbaTD + "," + lProbaD + ","
+						+ lProbaSuivre + ");");
 
-      try {
-        Thread.sleep(10);
-      } catch (InterruptedException e) {
-        showStatus(e.toString());
-      }
-    }
-  }
+				// création et ajout de la fourmi dans la colonie
+				lFourmi = new CFourmi(lTabColor[i], lTabColor[lColor], lProbaTD, lProbaG, lProbaD, lProbaSuivre,
+						mPainting, lTypeDeplacement, lInit_x, lInit_y, lInitDirection, lTaille, lSeuilLuminance, this);
+				mColonie.addElement(lFourmi);
+			}
+		}
+		// on affiche le nombre de fourmis
+		// System.out.println("Nombre de Fourmis:"+lNbFourmis);
+	}
 
-  /****************************************************************************/
-  /**
-   * Lancer l'applet
-   *
-   */
-  @Override
-  public void start() {
-    mColony = new CColonie(mColonie, this);
-    mThreadColony = new Thread(mColony);
-    mThreadColony.setPriority(Thread.MIN_PRIORITY);
+	@Override
+	public void run() {
+		String lMessage;
 
-    showStatus("starting...");
-    statisticsHandler.start();
+		mPainting.init();
+		int cores = Runtime.getRuntime().availableProcessors();
+		
+		Thread currentThread = Thread.currentThread();
+		try {
+			for (int i = 0; i < cores; i++) {
+				executor.submit(new Thread_ForFourmis(mColonie, mColonie.size() ,cores, i));
+			}
+			while (mApplis == currentThread) {
+				if (mPause) {
+					lMessage = "pause";
+					executor.shutdownNow();//on arrête tout
+				} else {
+					
+					lMessage = "running (" + statisticsHandler.getLastFPS() + ") ";
+				}
+				showStatus(lMessage);
 
-    // Create the thread.
-    mApplis = new Thread(this);
-    // and let it start running
-    mApplis.setPriority(Thread.MIN_PRIORITY);
-    mApplis.start();
-  }
+				try {
+					Thread.sleep(2);
+				} catch (InterruptedException e) {
+					showStatus(e.toString());
+				}
+			}
+			if (!executor.isShutdown()) {
+				executor.shutdownNow();
+				shutdownAndAwaitTermination(executor);// gére l'intéruption
+														// normalement
+			}
+		} catch (RejectedExecutionException e) {
+			executor.shutdownNow();
+		}
+	}
 
-  /****************************************************************************/
-  /**
-   * Arrêter l'applet
-   *
-   */
-  @Override
-  public void stop() {
-    showStatus("stopped...");
+	/****************************************************************************/
+	/**
+	 * Lancer l'applet
+	 *
+	 */
+	@Override
+	public void start() {
+		mColony = new CColonie(mColonie, this);
 
-    // On demande au Thread Colony de s'arreter et on attend qu'il s'arrete
-    mColony.pleaseStop();
-    try {
-      mThreadColony.join();
-    } catch (Exception e) {
-    }
+		int cores = Runtime.getRuntime().availableProcessors();
+		executor = Executors.newFixedThreadPool(cores);
 
-    statisticsHandler.stop();
+		showStatus("starting...");
+		statisticsHandler.start();
 
-    mThreadColony = null;
-    mApplis = null;
-  }
+		// Create the thread.
+		mApplis = new Thread(this);
+		// and let it start running
+		mApplis.setPriority(Thread.MIN_PRIORITY);
+		mApplis.start();
+	}
+
+	/****************************************************************************/
+	/**
+	 * Arrêter l'applet
+	 *
+	 */
+	@Override
+	public void stop() {
+		showStatus("stopped...");
+
+		// On demande au Thread Colony de s'arreter et on attend qu'il s'arrete
+		executor.shutdownNow();
+
+		shutdownAndAwaitTermination(executor);// gére l'intéruption normalement
+
+		statisticsHandler.stop();
+
+		mApplis = null;
+	}
 }

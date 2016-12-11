@@ -11,35 +11,16 @@ package org.projectsforge.performance.tp.fourmispeintre;
  */
 import java.util.Vector;
 
-public class CColonie implements Runnable {
+public class CColonie {
 
-  private Boolean mContinue = Boolean.TRUE;
   private Vector<CFourmi> mColonie;
+
   private PaintingAnts mApplis;
 
   /** Creates a new instance of CColonie */
   public CColonie(Vector<CFourmi> pColonie, PaintingAnts pApplis) {
     mColonie = pColonie;
     mApplis = pApplis;
-  }
-
-  public void pleaseStop() {
-    mContinue = false;
-  }
-
-  @Override
-  public void run() {
-
-    while (mContinue == true) {
-      if (!mApplis.getPause()) {
-    	//TODO créer des threads qui font le deplacement (CFourmi en thread ? / des threads qui font seulement une partie de la boucle)
-        for (int i = 0; i < mColonie.size(); i++) {
-          mColonie.get(i).deplacer();
-        }
-      } else {
-
-      }
-    }
   }
 
 }

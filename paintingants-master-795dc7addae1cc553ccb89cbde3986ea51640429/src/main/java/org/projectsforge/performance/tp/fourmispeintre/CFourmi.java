@@ -4,6 +4,7 @@ package org.projectsforge.performance.tp.fourmispeintre;
 
 import java.awt.Color;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class CFourmi {
   // Tableau des incrémentations à effectuer sur la position des fourmis
@@ -32,7 +33,7 @@ public class CFourmi {
   // seuil de luminance pour la détection de la couleur recherchée
   private float mSeuilLuminance;
   // nombre de déplacements de la fourmi
-  private long mNbDeplacements;
+  private AtomicLong mNbDeplacements;
 
   /*************************************************************************************************
   */
@@ -85,21 +86,20 @@ public class CFourmi {
     CFourmi.mIncDirection[7][1] = -1;
 
     mSeuilLuminance = pSeuilLuminance;
-    mNbDeplacements = 0;
+    mNbDeplacements = new AtomicLong(0);
   }
 
   /*************************************************************************************************
    * Titre : void deplacer() Description : Fonction de deplacement de la fourmi
    *
    */
-  public synchronized void deplacer() {
-	//TODO revoir les variables que l'on peut rendre atomic voir si la synchronization peut être supprimé
+  public void deplacer() {
     float tirage, prob1, prob2, prob3, total;
     int[] dir = new int[3];
     int i, j;
     Color lCouleur;
 
-    mNbDeplacements++;
+    mNbDeplacements.incrementAndGet();
 
     dir[0] = 0;
     dir[1] = 0;
@@ -188,8 +188,9 @@ public class CFourmi {
   /*************************************************************************************************
   */
   public long getNbDeplacements() {
-    return mNbDeplacements;
+    return mNbDeplacements.get();
   }
+
   /****************************************************************************/
 
   /*************************************************************************************************

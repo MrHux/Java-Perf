@@ -14,7 +14,7 @@ import javax.swing.event.EventListenerList;
 
 /**
  * The Class StatisticsHandler.
- * 
+ *
  * @author Sébastien Aupetit [sebtic@projectsforge.org]
  *
  */
@@ -39,6 +39,7 @@ public class StatisticsHandler {
      */
     public void update(StatisticsHandler handler);
   }
+  // couleur
 
   /** The fps timer. */
   private Timer fpsTimer;
